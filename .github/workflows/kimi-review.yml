@@ -48,7 +48,7 @@ jobs:
           ref: ${{ (github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment') && steps.get-pr.outputs.ref || github.head_ref }}
 
       - name: Kimi Code Review
-        uses: xiaoju111a/kimi-actions@v1.0.4
+        uses: xiaoju111a/kimi-actions@v1.0.5
         with:
           kimi_api_key: ${{ secrets.KIMI_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -66,7 +66,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Kimi Issue Triage
-        uses: xiaoju111a/kimi-actions@v1.0.4
+        uses: xiaoju111a/kimi-actions@v1.0.5
         with:
           kimi_api_key: ${{ secrets.KIMI_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
