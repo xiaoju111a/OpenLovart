@@ -64,6 +64,9 @@ export function MarkdownRenderer({ content }: { content: string }) {
                 {children}
               </td>
             );
+          },
+          img({ src, alt }) {
+            return <img src={src} alt={alt} className="rounded-lg border border-gray-200 my-4 max-h-96 object-cover" />;
           }
         }}
       >

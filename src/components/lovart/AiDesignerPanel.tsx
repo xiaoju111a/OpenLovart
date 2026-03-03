@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
     Sparkles, Paperclip, AtSign, Lightbulb, Zap, Globe, Box, ArrowUp,
-    RefreshCw, MessageSquare, Clock, Share2, Layout, Maximize2, X
+    RefreshCw, MessageSquare, Clock, Share2, Layout, Maximize2, X,ArrowDown
 } from 'lucide-react';
 import { MarkdownRenderer } from '@/components/lovart/MarkdownRenderer';
 interface AiDesignerPanelProps {
@@ -53,7 +53,7 @@ export function AiDesignerPanel({ onGenerate, isGenerating, onClose, initialProm
             { role: 'user', content: prompt },
             { role: 'assistant', content: '' } // 预留一个空的助手回复位
         ]);
-
+        
         try {
             // 2. 调用父组件传入的函数获取流
             const stream = await onGenerate(prompt);
@@ -92,17 +92,37 @@ export function AiDesignerPanel({ onGenerate, isGenerating, onClose, initialProm
         }
     }, [initialPrompt, hasAutoSent, isGenerating]);
 
+    const [isAtBottom, setIsAtBottom] = useState(true);
+    const [showScrollBottom, setShowScrollBottom] = useState(false);
+    // 处理手动滚动检测
+    const handleScroll = () => {
+        if (!scrollRef.current) return;
+        const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+
+        // 阈值设为 50px，如果离底部距离小于 50，则认为用户想看最新内容
+        const atBottom = scrollHeight - scrollTop - clientHeight < 125;
+        setIsAtBottom(atBottom);
+        setShowScrollBottom(!isAtBottom);
+    };
+
     React.useEffect(() => {
-        if (scrollRef.current) {
+        if (isAtBottom && scrollRef.current) {
             // 每次 messages 改变或正在生成时，自动滚动到底部
             scrollRef.current.scrollTo({
                 top: scrollRef.current.scrollHeight,
-                behavior: 'smooth'
+                behavior: 'auto'
             });
         }
-    }, [messages, isGenerating]);
+    }, [messages, isGenerating ,isAtBottom]);
+
+    const scrollToBottom = () => {
+        scrollRef.current?.scrollTo({
+            top: scrollRef.current.scrollHeight,
+            behavior: 'smooth'
+        });
+    };
     return (
-        <div className="flex flex-col h-full bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+        <div  className="flex flex-col h-full bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
             {/* Header Icons */}
             <div className="flex items-center justify-end gap-4 p-4 text-gray-400">
                 <button className="hover:text-gray-600 transition-colors"><MessageSquare size={18} /></button>
@@ -116,9 +136,8 @@ export function AiDesignerPanel({ onGenerate, isGenerating, onClose, initialProm
                     </button>
                 )}
             </div>
-
             {/* Main Content */}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 pb-4">
+            <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-8 pb-4">
                 {messages.length === 0 ? (
                     <>
                         {/* Greeting */}
@@ -188,8 +207,19 @@ export function AiDesignerPanel({ onGenerate, isGenerating, onClose, initialProm
                         ))}
                     </div>
                 )}
+            
             </div>
-
+            <div className="relative h-0 flex justify-center">
+                {showScrollBottom && (
+                    <button
+                        onClick={scrollToBottom}
+                        className="absolute bottom-6 right-8 flex items-center gap-2 px-4 py-2 bg-white border border-gray-100 shadow-xl rounded-full text-blue-600 text-sm font-medium hover:bg-gray-50 transition-all animate-in fade-in slide-in-from-bottom-2 z-50"
+                    >
+                        <ArrowDown size={14} className="animate-bounce" />
+                        <span>回到底部</span>
+                    </button>
+                )}
+            </div>
             {/* Input Area */}
             <div className="p-6 pt-2">
                 <div className="relative border border-gray-200 rounded-2xl bg-white shadow-sm focus-within:ring-2 focus-within:ring-blue-100 focus-within:border-blue-300 transition-all">
