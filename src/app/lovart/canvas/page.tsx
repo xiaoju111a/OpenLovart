@@ -567,7 +567,7 @@ function LovartCanvasContent() {
         }
     };
 
-    const handleAiChat = async (prompt: string): Promise<string> => {
+    const handleAiChat = async (prompt: string): Promise<ReadableStream<Uint8Array>> => {
         setIsGenerating(true);
         try {
             const response = await fetch('/api/generate-design', {
@@ -580,17 +580,17 @@ function LovartCanvasContent() {
                 }),
             });
 
-            const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.details || data.error || '生成失败');
+                const errorData = await response.json();
+                throw new Error(errorData.details || errorData.error || '生成失败');
             }
 
-            if (data.suggestion) {
-                return data.suggestion;
+            if (!response.body) {
+                throw new Error('未收到数据流');
             }
 
-            return "未收到回复";
+            return response.body;
         } catch (error) {
             console.error('Chat generation failed:', error);
             throw error;

@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import {
     Sparkles, Paperclip, AtSign, Lightbulb, Zap, Globe, Box, ArrowUp,
-    RefreshCw, MessageSquare, Clock, Share2, Layout, Maximize2, X
+    RefreshCw, MessageSquare, Clock, Share2, Layout, Maximize2, X,ArrowDown
 } from 'lucide-react';
-
+import { MarkdownRenderer } from '@/components/lovart/MarkdownRenderer';
 interface AiDesignerPanelProps {
-    onGenerate: (prompt: string) => Promise<string>;
+    onGenerate: (prompt: string) => Promise<ReadableStream<Uint8Array>>;
     isGenerating: boolean;
     onClose?: () => void;
     initialPrompt?: string;
@@ -20,7 +20,7 @@ export function AiDesignerPanel({ onGenerate, isGenerating, onClose, initialProm
     const [inputValue, setInputValue] = useState(initialPrompt || '');
     const [messages, setMessages] = useState<Message[]>([]);
     const [hasAutoSent, setHasAutoSent] = useState(false);
-
+    const scrollRef = React.useRef<HTMLDivElement>(null);
     const suggestions = [
         {
             title: 'Wine List',
@@ -47,13 +47,36 @@ export function AiDesignerPanel({ onGenerate, isGenerating, onClose, initialProm
             const prompt = inputValue;
             setInputValue('');
 
-            // Add user message
-            setMessages(prev => [...prev, { role: 'user', content: prompt }]);
+        // 1. 同步添加消息记录
+        setMessages(prev => [
+            ...prev, 
+            { role: 'user', content: prompt },
+            { role: 'assistant', content: '' } // 预留一个空的助手回复位
+        ]);
+        
+        try {
+            // 2. 调用父组件传入的函数获取流
+            const stream = await onGenerate(prompt);
+            
+            const reader = stream.getReader();
+            const decoder = new TextDecoder();
+            let accumulatedContent = '';
 
-            try {
-                const response = await onGenerate(prompt);
-                // Add assistant message
-                setMessages(prev => [...prev, { role: 'assistant', content: response }]);
+            // 3. 读取流数据
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                accumulatedContent += chunk;
+
+                // 4. 实时更新最后一条助手消息
+                setMessages(prev => {
+                    const newMsgs = [...prev];
+                    newMsgs[newMsgs.length - 1].content = accumulatedContent;
+                    return newMsgs;
+                });
+            }
             } catch (error) {
                 console.error('Failed to generate response:', error);
                 // Optionally add an error message
@@ -69,8 +92,37 @@ export function AiDesignerPanel({ onGenerate, isGenerating, onClose, initialProm
         }
     }, [initialPrompt, hasAutoSent, isGenerating]);
 
+    const [isAtBottom, setIsAtBottom] = useState(true);
+    const [showScrollBottom, setShowScrollBottom] = useState(false);
+    // 处理手动滚动检测
+    const handleScroll = () => {
+        if (!scrollRef.current) return;
+        const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+
+        // 阈值设为 50px，如果离底部距离小于 50，则认为用户想看最新内容
+        const atBottom = scrollHeight - scrollTop - clientHeight < 125;
+        setIsAtBottom(atBottom);
+        setShowScrollBottom(!isAtBottom);
+    };
+
+    React.useEffect(() => {
+        if (isAtBottom && scrollRef.current) {
+            // 每次 messages 改变或正在生成时，自动滚动到底部
+            scrollRef.current.scrollTo({
+                top: scrollRef.current.scrollHeight,
+                behavior: 'auto'
+            });
+        }
+    }, [messages, isGenerating ,isAtBottom]);
+
+    const scrollToBottom = () => {
+        scrollRef.current?.scrollTo({
+            top: scrollRef.current.scrollHeight,
+            behavior: 'smooth'
+        });
+    };
     return (
-        <div className="flex flex-col h-full bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+        <div  className="flex flex-col h-full bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
             {/* Header Icons */}
             <div className="flex items-center justify-end gap-4 p-4 text-gray-400">
                 <button className="hover:text-gray-600 transition-colors"><MessageSquare size={18} /></button>
@@ -84,9 +136,8 @@ export function AiDesignerPanel({ onGenerate, isGenerating, onClose, initialProm
                     </button>
                 )}
             </div>
-
             {/* Main Content */}
-            <div className="flex-1 overflow-y-auto px-8 pb-4">
+            <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-8 pb-4">
                 {messages.length === 0 ? (
                     <>
                         {/* Greeting */}
@@ -135,25 +186,40 @@ export function AiDesignerPanel({ onGenerate, isGenerating, onClose, initialProm
                                             : 'bg-white border border-gray-100 text-gray-800 shadow-sm rounded-tl-sm'
                                         }`}
                                 >
-                                    <p className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</p>
+                                    <div className={msg.role === 'assistant' ? 'prose prose-sm prose-blue max-w-full break-words' : ''}>
+                                        <MarkdownRenderer content={msg.content} />
+                                    </div>
+                                    
+                                    {/* if generating show cursor*/}
+                                    
+                                    {isGenerating && index === messages.length - 1 && (
+                                        msg.content.length > 0 ? (
+                                        <span className="inline-block w-1.5 h-4 ml-1 bg-grey-500 animate-pulse" />
+                                    ):(
+                                            <div className="flex gap-1">
+                                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                                            </div>
+                                        ))}
                                 </div>
                             </div>
                         ))}
-                        {isGenerating && (
-                            <div className="flex justify-start">
-                                <div className="bg-white border border-gray-100 p-4 rounded-2xl rounded-tl-sm shadow-sm">
-                                    <div className="flex gap-1">
-                                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
                     </div>
                 )}
+            
             </div>
-
+            <div className="relative h-0 flex justify-center">
+                {showScrollBottom && (
+                    <button
+                        onClick={scrollToBottom}
+                        className="absolute bottom-6 right-8 flex items-center gap-2 px-4 py-2 bg-white border border-gray-100 shadow-xl rounded-full text-blue-600 text-sm font-medium hover:bg-gray-50 transition-all animate-in fade-in slide-in-from-bottom-2 z-50"
+                    >
+                        <ArrowDown size={14} className="animate-bounce" />
+                        <span>回到底部</span>
+                    </button>
+                )}
+            </div>
             {/* Input Area */}
             <div className="p-6 pt-2">
                 <div className="relative border border-gray-200 rounded-2xl bg-white shadow-sm focus-within:ring-2 focus-within:ring-blue-100 focus-within:border-blue-300 transition-all">
