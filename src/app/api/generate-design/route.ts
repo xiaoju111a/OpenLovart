@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 
+
 export async function POST(request: NextRequest) {
     try {
         const { prompt } = await request.json();
@@ -39,13 +40,29 @@ export async function POST(request: NextRequest) {
                     content: `Create a design concept for: ${prompt}`
                 },
             ],
+            stream: true,
         });
-
-        const designSuggestion = completion.choices[0].message.content;
-
-        return NextResponse.json({
-            suggestion: designSuggestion,
+        const encoder = new TextEncoder();
+        const designSuggestionStream = new ReadableStream({
+            async start(controller) {
+                for await (const chunk of completion) {
+                    const content = chunk.choices[0]?.delta?.content || "";
+                    if (content) {
+                        controller.enqueue(encoder.encode(content));
+                    }
+                }
+                controller.close();
+            },
         });
+        
+        return new NextResponse(designSuggestionStream, {
+                    headers: {
+                        'Content-Type': 'text/event-stream; charset=utf-8',
+                        'Cache-Control': 'no-cache',
+                        'Connection': 'keep-alive',
+                    },
+                });
+
     } catch (error: any) {
         console.error('Error generating design:', error);
         return NextResponse.json(
